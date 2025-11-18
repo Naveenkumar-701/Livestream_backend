@@ -470,13 +470,18 @@ export const startEgress = async (req, res) => {
         }
 
         // Timestamp folder
-        const d = new Date();
+        // Convert UTC → IST
+        const istDate = new Date(
+            new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+        );
+
         const timestamp =
-            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` +
-            `-${String(d.getDate()).padStart(2, "0")}_` +
-            `${String(d.getHours()).padStart(2, "0")}-${String(
-                d.getMinutes()
-            ).padStart(2, "0")}-${String(d.getSeconds()).padStart(2, "0")}`;
+            `${istDate.getFullYear()}-${String(istDate.getMonth() + 1).padStart(2, "0")}` +
+            `-${String(istDate.getDate()).padStart(2, "0")}_` +
+            `${String(istDate.getHours()).padStart(2, "0")}-${String(
+                istDate.getMinutes()
+            ).padStart(2, "0")}-${String(istDate.getSeconds()).padStart(2, "0")}`;
+
 
         const basePrefix = normalizePrefix(process.env.S3_PREFIX || "testvideos/");
         const prefix = `${basePrefix}${timestamp}/${roomName}/`;
