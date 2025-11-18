@@ -21,10 +21,14 @@ const app = express();
 app.use(express.json({ limit: "100mb" }));
 app.use(
     cors({
-        origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+        origin: [
+            "http://localhost:3000",
+            "https://livestream-alpha-eight.vercel.app"
+        ],
         credentials: true,
     })
 );
+
 
 app.get("/", (req, res) => res.send("API is running..."));
 
