@@ -1,38 +1,3 @@
-// // server.js
-// import express from "express";
-// import dotenv from "dotenv";
-// import cors from "cors";
-// import connectDB from "./config/db.js";
-// import leaPreviewRoutes from "./routes/lea_preview_routes.js";
-// import livekitRoutes from "./routes/livekitRoutes.js";
-// import recordingsRoutes from "./routes/recordingsRoutes.js"; // <-- add
-
-// dotenv.config();
-// connectDB();
-
-// const app = express();
-
-// app.use(express.json({ limit: "100mb" }));
-// app.use(
-//     cors({
-//         origin: "http://localhost:3000",
-//         credentials: true,
-//     })
-// );
-
-// app.get("/", (req, res) => res.send("API is running..."));
-
-// app.use("/api/lea-preview", leaPreviewRoutes);
-// app.use("/api/livekit", livekitRoutes);
-// app.use("/api/recordings", recordingsRoutes); // <-- add
-
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
-
-
-
-
 
 
 
@@ -42,12 +7,12 @@ import 'dotenv/config'; // <-- load .env FIRST
 
 import express from "express";
 import cors from "cors";
-import connectDB from "./config/db.js";
+
 
 // Routes
-import leaPreviewRoutes from "./routes/lea_preview_routes.js";
+
 import livekitRoutes from "./routes/livekitRoutes.js";
-import recordingsRoutes from "./routes/recordingsRoutes.js";
+
 
 // connectDB();
 
@@ -56,10 +21,14 @@ const app = express();
 app.use(express.json({ limit: "100mb" }));
 app.use(
     cors({
-        origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+        origin: [
+            "http://localhost:3000",
+            "https://livestream-alpha-eight.vercel.app"
+        ],
         credentials: true,
     })
 );
+
 
 app.get("/", (req, res) => res.send("API is running..."));
 
@@ -77,9 +46,10 @@ app.get("/_env-check", (req, res) => {
     });
 });
 
-app.use("/api/lea-preview", leaPreviewRoutes);
+
 app.use("/api/livekit", livekitRoutes);
-app.use("/api/recordings", recordingsRoutes);
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
