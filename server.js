@@ -49,7 +49,7 @@ import leaPreviewRoutes from "./routes/lea_preview_routes.js";
 import livekitRoutes from "./routes/livekitRoutes.js";
 import recordingsRoutes from "./routes/recordingsRoutes.js";
 
-connectDB();
+// connectDB();
 
 const app = express();
 
