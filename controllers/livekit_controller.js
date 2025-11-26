@@ -517,11 +517,15 @@ export const startEgress = async (req, res) => {
         console.log("🎉 Egress output folder:", prefix);
 
         // Respond immediately
+        const recordingStartTime = Date.now();
+        console.log("🎥 Recording Started At (UNIX ms):", recordingStartTime);
+
         res.json({
             ok: true,
             egressId: info.egressId,
             status: info.status,
             playlistUrl,
+            recordingStartTime,
         });
 
         // Start MP4 cloud recording
