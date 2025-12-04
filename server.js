@@ -7,14 +7,16 @@ import 'dotenv/config'; // <-- load .env FIRST
 
 import express from "express";
 import cors from "cors";
+import connectDB from "./config/db.js";
 
 
 // Routes
 
 import livekitRoutes from "./routes/livekitRoutes.js";
+import interviewRoutes from "./routes/interviewRoutes.js";
 
 
-// connectDB();
+connectDB();
 
 const app = express();
 
@@ -48,6 +50,8 @@ app.get("/_env-check", (req, res) => {
 
 
 app.use("/api/livekit", livekitRoutes);
+app.use("/api/interview",interviewRoutes);
+
 
 
 const PORT = process.env.PORT || 5000;
