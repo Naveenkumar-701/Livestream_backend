@@ -78,7 +78,7 @@ export const generateAIFollowUp = async (req, res) => {
             questionType,
             language = "javascript",
             followUpIndex = 0,
-            followupResponse = [] // This comes from frontend Redux
+            followupResponse = []
         } = req.body;
 
         console.log("📥 AI Follow-up Request:", {
