@@ -1,31 +1,3 @@
-// import TestInterview from "../models/testinterview.js";
-
-// export const getInterviewQuestions = async (req, res) => {
-//     try {
-//         const { id } = req.params;
-
-//         const interview = await TestInterview.findById(id)
-//             .select("questionsList job_title job_desc")
-//             .lean();
-
-//         if (!interview) {
-//             return res.status(404).json({ ok: false, message: "Interview not found" });
-//         }
-
-//         return res.json({
-//             ok: true,
-//             job_title: interview.job_title,
-//             job_desc: interview.job_desc,
-//             questions: interview.questionsList
-//         });
-
-//     } catch (err) {
-//         console.error("Get Questions Error:", err);
-//         return res.status(500).json({ ok: false, message: "Server Error" });
-//     }
-// };
-
-
 
 // backend/controllers/testInterview.js
 
@@ -76,10 +48,15 @@ export const generateAIFollowUp = async (req, res) => {
             questionId,
             answer,
             questionType,
-            language = "javascript",
+            language = "",
             followUpIndex = 0,
-            followupResponse = [] // This comes from frontend Redux
+            followupResponse = [],
+            timings = {},
+            employerTesting = false,
+            schedule_id = ""
         } = req.body;
+
+        const { startTime, endTime } = timings;
 
         console.log("📥 AI Follow-up Request:", {
             interviewId,
@@ -88,7 +65,14 @@ export const generateAIFollowUp = async (req, res) => {
             questionType,
             language,
             followUpIndex,
-            followupResponse: followupResponse
+            followupResponseCount: followupResponse?.length,
+            employerTesting,
+            schedule_id,
+            timings: {
+                startTime,
+                endTime
+            }
+
         });
 
         // Get question text if available
@@ -122,72 +106,106 @@ export const generateAIFollowUp = async (req, res) => {
         // Check if answer is valid
         const hasValidAnswer = answer && answer.trim() !== "";
 
-        // Maximum 3 follow-ups per question
-        if (!hasValidAnswer || followUpIndex >= 3) {
-            console.log("❌ No valid answer or max follow-ups reached");
+        if (!hasValidAnswer) {
+            console.log("❌ No valid answer - skipping follow-up");
             return res.json({
                 ok: true,
                 followUpQuestion: null,
-                message: "No follow-up generated"
+                message: "No follow-up generated - empty answer"
             });
         }
 
-        // Process followupResponse array (similar to friend's logic)
+        // Process followupResponse array
         let conversation = [];
 
-        // Filter out empty responses and keep valid ones
-        if (Array.isArray(followupResponse)) {
-            conversation = followupResponse.filter(item => {
-                // Keep only items with valid candidate answers
-                return item &&
-                    item.candiAnswer &&
-                    item.candiAnswer.trim() !== "";
-            });
+        // CRITICAL FIX: Build conversation from followupResponse
+        if (Array.isArray(followupResponse) && followupResponse.length > 0) {
+            // Use the followupResponse array as is (it should already have parent + previous follow-ups)
+            conversation = followupResponse.map(item => ({
+                question: item.question,
+                candiAnswer: item.candiAnswer,
+                quesType: item.quesType,
+                language: item.language,
+                followUpIndex: item.followUpIndex,
+                timestamp: item.timestamp || new Date().toISOString()
+            }));
 
-            // If last item has empty answer, remove it
-            if (conversation.length > 0) {
-                const lastItem = conversation[conversation.length - 1];
-                if (!lastItem.candiAnswer || lastItem.candiAnswer.trim() === "") {
-                    conversation.pop();
-                }
-            }
-        }
-
-        // Add current Q&A to conversation (formatted like friend's structure)
-        const newConversationItem = {
-            question: questionText,
-            candiAnswer: answer.trim(),
-            quesType: questionType,
-            language: questionType === "coding" ? language : null,
-            timestamp: new Date().toISOString(),
-            followUpIndex: followUpIndex
-        };
-
-        // Check if we should clear conversation array based on your criteria
-        const shouldClearConversation =
-            conversation.length > 3 ||
-            (conversation.length > 0 &&
-                conversation[conversation.length - 1].candiAnswer === "");
-
-        if (shouldClearConversation) {
-            console.log("🧹 Clearing conversation array - length > 3 or empty last answer");
-            conversation = [newConversationItem]; // Start fresh with current item
+            console.log(`📝 Using existing conversation from followupResponse (${conversation.length} items)`);
         } else {
-            conversation.push(newConversationItem);
+            // If no followupResponse, start with parent
+            console.log("🎯 Starting new conversation with parent");
+            conversation = [{
+                question: questionText,
+                candiAnswer: answer.trim(),
+                quesType: questionType,
+                language: questionType === "coding" ? language : null,
+                followUpIndex: 0,
+                timestamp: new Date().toISOString()
+            }];
         }
 
-        // Keep only last 3 conversations for context
-        if (conversation.length > 3) {
-            conversation = conversation.slice(-3);
+        // Add current answer to conversation if not already present
+        const currentIndex = conversation.findIndex(item => item.followUpIndex === followUpIndex);
+        if (currentIndex === -1) {
+            // Add as new item
+            conversation.push({
+                question: questionText,
+                candiAnswer: answer.trim(),
+                quesType: questionType,
+                language: questionType === "coding" ? language : null,
+                followUpIndex: followUpIndex,
+                timings: {
+                    startTime,
+                    endTime
+                },
+                timestamp: new Date().toISOString()
+            });
+            console.log(`Added follow-up ${followUpIndex} to conversation`);
+        } else {
+            // Update existing
+            conversation[currentIndex] = {
+                ...conversation[currentIndex],
+                candiAnswer: answer.trim(),
+                timings: {
+                    startTime,
+                    endTime
+                },
+                timestamp: new Date().toISOString()
+            };
+            console.log(`🔄 Updated follow-up ${followUpIndex} in conversation`);
         }
 
-        console.log("📝 Processed Conversation:", conversation.length, "items");
+        // Sort conversation by followUpIndex
+        conversation.sort((a, b) => a.followUpIndex - b.followUpIndex);
+
+        // Log the conversation structure
+        console.log("📊 Current Conversation Structure:");
+        console.log(`Total items: ${conversation.length}`);
         conversation.forEach((item, idx) => {
-            console.log(`  ${idx + 1}. Q: ${item.question?.substring(0, 50)}...`);
-            console.log(`     A: ${item.candiAnswer?.substring(0, 50)}...`);
+            const type = item.followUpIndex === 0 ? 'PARENT' : `FOLLOW-UP ${item.followUpIndex}`;
+            console.log(`  [${idx}] ${type}:`);
+            console.log(`      Q: ${item.question?.substring(0, 60)}...`);
+            console.log(`      A: ${item.candiAnswer?.substring(0, 60)}...`);
+            console.log(`      Type: ${item.quesType}, Lang: ${item.language || 'N/A'}`);
         });
 
-        // Determine which AI API to use (same logic as friend's code)
+        // ========== CRITICAL FIX: Change from 2 to 3 ==========
+        // Check if we should generate another follow-up
+        // followUpIndex values: parent=0, follow-up1=1, follow-up2=2, follow-up3=3
+        // We want to stop AFTER follow-up 3, so check if followUpIndex >= 3
+        if (followUpIndex >= 3) { // CHANGED FROM 2 TO 3
+            console.log("✅ Maximum 3 follow-ups reached for this parent question");
+            return res.json({
+                ok: true,
+                followUpQuestion: null,
+                followSts: "false",
+                conversation: conversation,
+                message: "Maximum follow-ups reached"
+            });
+        }
+        // ========== END CRITICAL FIX ==========
+
+        // Determine which AI API to use based on conversation content
         const firstIsCoding = conversation.length > 0 && conversation[0].quesType === "coding";
         let apiUrl;
 
@@ -201,13 +219,13 @@ export const generateAIFollowUp = async (req, res) => {
 
         console.log("🔗 Using API:", apiUrl);
 
-        // Prepare payload based on question type
+        // Prepare payload for AI - send ALL conversation items
         let payload;
         if (questionType === "coding" || firstIsCoding) {
             payload = {
                 conversation: conversation.map(item => ({
                     question: item.question,
-                    answer: item.candiAnswer,
+                    answer: item.candiAnswer || item.answer,
                     quesType: item.quesType,
                     language: item.language
                 })),
@@ -234,7 +252,7 @@ export const generateAIFollowUp = async (req, res) => {
             payload = {
                 conversation: conversation.map(item => ({
                     question: item.question,
-                    answer: item.candiAnswer,
+                    answer: item.candiAnswer || item.answer,
                     quesType: item.quesType
                 })),
                 complexity: interview.complexity || "Intermediate",
@@ -245,8 +263,7 @@ export const generateAIFollowUp = async (req, res) => {
             };
         }
 
-        // Log payload for debugging
-        console.log("📤 Payload to AI API:", JSON.stringify(payload, null, 2));
+        console.log("📤 Payload to AI API - Conversation items:", conversation.length);
 
         // Call AI API
         const response = await axios.post(apiUrl, payload);
@@ -256,14 +273,18 @@ export const generateAIFollowUp = async (req, res) => {
         let followSts = "false";
 
         if (response.data?.question) {
-            // Determine follow-up question type based on index (same logic as friend's code)
+            // Determine next follow-up index
+            const nextFollowUpIndex = followUpIndex + 1;
+
+            // Determine follow-up question type
             let followUpQuestionType = questionType;
             if (conversation.length > 0 && conversation[0].quesType === "coding") {
-                if (followUpIndex === 0) {
+                // Alternate between theoretical and coding
+                if (nextFollowUpIndex === 1) {
                     followUpQuestionType = "theoretical";
-                } else if (followUpIndex === 1) {
+                } else if (nextFollowUpIndex === 2) {
                     followUpQuestionType = "coding";
-                } else if (followUpIndex === 2) {
+                } else if (nextFollowUpIndex === 3) {
                     followUpQuestionType = "theoretical";
                 }
             }
@@ -274,19 +295,22 @@ export const generateAIFollowUp = async (req, res) => {
                 quesType: followUpQuestionType,
                 duration: 3,
                 language: language,
-                followUpIndex: followUpIndex + 1,
+                followUpIndex: nextFollowUpIndex, // This will be 1, 2, or 3
                 isAIGenerated: true
             };
 
             followSts = "true";
+
+            console.log(`✅ Generated follow-up ${nextFollowUpIndex} (${followUpQuestionType})`);
+            console.log(`   Question: ${followUpQuestion.question.substring(0, 80)}...`);
         }
 
         return res.json({
             ok: true,
             followUpQuestion,
             followSts,
-            conversation: conversation, // Return processed conversation for frontend
-            message: followUpQuestion ? "AI follow-up generated" : "No follow-up generated"
+            conversation: conversation,
+            message: followUpQuestion ? `Follow-up ${followUpIndex + 1} generated` : "No follow-up generated"
         });
 
     } catch (error) {
