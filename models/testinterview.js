@@ -367,6 +367,8 @@ const testinterviewSchema = new mongoose.Schema(
 
         streamIdstart: { type: String },
         streamvideoData: { type: String },
+        finalVideoUrl: { type: String, default: "" },
+
 
         email_status: { type: Boolean, default: false },
         calender_id: { type: String, default: "" },

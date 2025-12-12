@@ -3,6 +3,7 @@
 
 import TestInterview from "../models/testinterview.js";
 import axios from 'axios';
+import { EgressClient } from "livekit-server-sdk";
 
 export const getInterviewQuestions = async (req, res) => {
     try {
@@ -319,5 +320,198 @@ export const generateAIFollowUp = async (req, res) => {
             ok: false,
             message: "Failed to generate AI follow-up"
         });
+    }
+};
+
+
+// COMMON UNIVERSAL FUNCTION FOR UPDATING INTERVIEW STATUS
+export const updateInterviewStatus = async (req, res) => {
+    try {
+        const { interviewId, interviewStatus } = req.body;
+
+        console.log("📥 Received Status Update Request:", req.body);
+
+        if (!interviewId || !interviewStatus) {
+            console.log("❌ Missing fields:", req.body);
+            return res.status(400).json({
+                ok: false,
+                message: "interviewId and interviewStatus are required"
+            });
+        }
+
+        // Status update object
+        const updateData = { interviewStatus };
+
+        if (interviewStatus === "started") {
+            updateData.interviewStarted = new Date();
+            console.log("⏳ Interview marked as STARTED");
+        }
+
+        if (interviewStatus === "completed") {
+            updateData.interviewCompleted = new Date();
+            console.log("🏁 Interview marked as COMPLETED");
+        }
+
+        // Update Database
+        const updated = await TestInterview.findByIdAndUpdate(
+            interviewId,
+            updateData,
+            { new: true }
+        );
+
+        console.log("✅ DB Updated Successfully:", {
+            id: interviewId,
+            status: updated.interviewStatus,
+            started: updated.interviewStarted,
+            completed: updated.interviewCompleted
+        });
+
+        return res.json({
+            ok: true,
+            message: `Interview status updated to ${interviewStatus}`,
+            data: updated
+        });
+
+    } catch (error) {
+        console.error("🔥 Backend Error (updateInterviewStatus):", error);
+        return res.status(500).json({
+            ok: false,
+            message: "Server error while updating status"
+        });
+    }
+};
+
+
+export const saveInterviewEvent = async (req, res) => {
+    try {
+        const {
+            interviewId,
+            interviewType = true,
+            interviewStatus,
+            byEmployer = true,
+            currentQuestionId = null,
+            reason = "",
+            candidateInterivew = false
+        } = req.body;
+
+        console.log("📥 Interruption Event Received:", req.body);
+
+        if (!interviewId || !interviewStatus || !reason) {
+            return res.status(400).json({
+                ok: false,
+                message: "interviewId, interviewStatus, and reason are required"
+            });
+        }
+
+        const payload = {
+            interviewType,
+            interviewStatus,
+            byEmployer,
+            currentQuestionId,
+            reason,
+            candidateInterivew,
+            eventTime: new Date()
+        };
+
+        await TestInterview.findByIdAndUpdate(
+            interviewId,
+            { $push: { interruptions: payload } }
+        );
+
+        console.log("✅ Interruption saved:", payload);
+
+        return res.json({
+            ok: true,
+            message: "Interruption recorded",
+            data: payload
+        });
+
+    } catch (err) {
+        console.error("❌ saveInterviewEvent Error:", err);
+        return res.status(500).json({
+            ok: false,
+            message: "Internal Server Error"
+        });
+    }
+};
+
+
+//// finalize answer for close tab
+
+
+export const finalizeInterview = async (req, res) => {
+    try {
+        
+        const { interviewId, egressId, question, answer, timestamp, vodPlaylistUrl } = req.body;
+
+        console.log("📥 Finalize Interview Triggered:", req.body);
+
+        if (!interviewId) {
+            console.warn("⚠️ finalizeInterview called without interviewId");
+            return res.status(400).json({ ok: false, message: "interviewId required" });
+        }
+
+        //  Store the last answer in DB (optional but recommended)
+        try {
+            await TestInterview.updateOne(
+                { _id: interviewId },
+                {
+                    $push: {
+                        autoSavedAnswers: {
+                            question: question || "",
+                            answer: answer || "",
+                            timestamp: timestamp || Date.now()
+                        }
+                    }
+                }
+            );
+            console.log("💾 Last answer saved into autoSavedAnswers");
+        } catch (err) {
+            console.log("⚠️ DB save failed (autoSavedAnswers):", err.message);
+        }
+
+        try {
+            if (vodPlaylistUrl) {
+
+                const cleanedUrl = String(vodPlaylistUrl).trim();
+                await TestInterview.updateOne(
+                    { _id: interviewId },
+                    { $set: { finalVideoUrl: cleanedUrl } }
+                );
+
+                const updatedDoc = await TestInterview.findById(interviewId).select("finalVideoUrl").lean();
+                console.log("🎥 Saved finalVideoUrl in DB:", updatedDoc?.finalVideoUrl);
+            } else {
+                console.log("⚠️ No vodPlaylistUrl provided — skipping video save");
+            }
+        } catch (err) {
+            console.error("❌ Error saving finalVideoUrl to DB:", err.message);
+        }
+
+        if (egressId) {
+            try {
+                const client = new EgressClient(
+                    process.env.LIVEKIT_HOST,
+                    process.env.LIVEKIT_API_KEY,
+                    process.env.LIVEKIT_API_SECRET
+                );
+
+                const resp = await client.stopEgress(egressId);
+                console.log("🛑 Egress stopped via finalize:", resp.status);
+            } catch (err) {
+                if (err && err.code === "failed_precondition") {
+                    console.log("⚠️ Egress already stopped earlier");
+                } else {
+                    console.error("❌ Error stopping egress:", err?.message || err);
+                }
+            }
+        } else {
+            console.log(" No egressId provided in finalize request");
+        }
+
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error("❌ finalizeInterview error:", err);
+        return res.status(500).json({ ok: false });
     }
 };
