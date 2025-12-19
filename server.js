@@ -79,6 +79,7 @@ import { initDeepgramSocket } from "./deepgram/deepgramSocket.js";
 // Routes
 import livekitRoutes from "./routes/livekitRoutes.js";
 import interviewRoutes from "./routes/interviewRoutes.js";
+import ttsRoutes from "./routes/ttsRoutes.js";
 
 connectDB();
 
@@ -113,6 +114,7 @@ app.get("/_env-check", (req, res) => {
 
 app.use("/api/livekit", livekitRoutes);
 app.use("/api/interview", interviewRoutes);
+app.use("/api/tts", ttsRoutes);
 
 const PORT = process.env.PORT || 5000;
 
