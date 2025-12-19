@@ -48,7 +48,8 @@ import connectDB from "./config/db.js";
 import leaPreviewRoutes from "./routes/lea_preview_routes.js";
 import livekitRoutes from "./routes/livekitRoutes.js";
 import recordingsRoutes from "./routes/recordingsRoutes.js";
-
+import authRoutes from './routes/authroutes.js'
+import userRoutes from './routes/userRoutes.js'
 connectDB();
 
 const app = express();
@@ -80,6 +81,8 @@ app.get("/_env-check", (req, res) => {
 app.use("/api/lea-preview", leaPreviewRoutes);
 app.use("/api/livekit", livekitRoutes);
 app.use("/api/recordings", recordingsRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
