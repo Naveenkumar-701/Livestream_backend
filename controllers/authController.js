@@ -1,0 +1,248 @@
+import jwt from "jsonwebtoken";
+import Users from "../models/Users.js";
+
+import sgMail from "@sendgrid/mail";
+import { generateRefreshToken } from "../utils/helpers.js";
+
+export const checkUser = async (req, res) => {
+  try {
+    const { email, delete: isDeleteRequest } = req.body;
+
+    const existingUser = await Users.findOne({
+      email: email.toLowerCase(),
+    }).lean();
+
+    if (!existingUser) {
+      return res.status(400).json({
+        error: "No account found with this email. Please verify the email address and try again.",
+      });
+    }
+
+    if (existingUser?.method === "google") {
+      return res.status(400).json({
+        error: "This account uses Google Sign-In. Please log in with Google to continue.",
+      });
+    }
+
+    let updatedUser = existingUser;
+    let referralCode;
+
+    if (
+      existingUser.recrootUserType === "tempCandidate" ||
+      existingUser.recrootUserType === "Candidate"
+    ) {
+      referralCode = Math.floor(1000 + Math.random() * 9000);
+
+      const updateObject = {
+        $set: {
+          referral_code: referralCode,
+        },
+      };
+
+      updatedUser = await Users.findOneAndUpdate(
+        { email: email.toLowerCase() },
+        updateObject,
+        { new: true }
+      ).lean();
+
+      if (!updatedUser) {
+        return res.status(400).json({
+          error: "User not found or unable to update",
+        });
+      }
+
+      const body = {
+        _id: updatedUser._id,
+        email: updatedUser.email,
+        role: updatedUser.recrootUserType,
+      };
+
+      const token = jwt.sign(
+        { user: body },
+        process.env.TOKEN_KEY,
+        { expiresIn: "24h" }
+      );
+
+      const expiresAt = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+
+      return res.status(200).json({
+        updatedUser,
+        token,
+        expiresAt,
+      });
+    }
+
+    return res.status(200).json({ existingUser });
+  } catch (error) {
+    console.error(`Error occurred: ${error.message}`);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const loginController = async (req, res, next) => {
+  console.log("--------------- app post auth login  1");
+
+  passport.authenticate("login", async (err, user, info) => {
+    console.log("--------------- app post auth login  2");
+
+    try {
+      if (err || !user) {
+        return res
+          .status(500)
+          .json({ message: "Please check your Email and Password" });
+      }
+
+      const userDetails = await Users.findById(user?._id);
+
+      if (
+        userDetails &&
+        userDetails.archiveStatus &&
+        userDetails.userInvitationStatus === "removed"
+      ) {
+        return res
+          .status(500)
+          .json({ message: "Your account has been de activated by Admin" });
+      }
+
+      req.login(user, { session: false }, async (error) => {
+        if (error) return next(error);
+
+        const payload = {
+          _id: user._id,
+          email: user.email,
+          role: user.recrootUserType,
+        };
+
+        const token = jwt.sign(
+          { user: payload },
+          process.env.TOKEN_KEY,
+          { expiresIn: "24h" }
+        );
+
+       const refreshToken = generateRefreshToken(user);
+
+        await Users.findByIdAndUpdate(user._id, {
+          refreshToken,
+        });
+
+        // Create availability if not added
+        if (
+          user &&
+          !user.isAvailabilityAdded &&
+          (user.memberType !== "Candidate" &&
+            user.memberType !== "tempCandidate")
+        ) {
+          const schedules = generateSchedules();
+
+          const availability = await Availability.create({
+            userId: user._id,
+            schedules,
+          });
+
+          await Users.findByIdAndUpdate(user._id, {
+            availabilityId: availability._id,
+            isAvailabilityAdded: true,
+          });
+        }
+
+        const updatedUser = await Users.findById(user._id);
+
+        return res.json({
+          User: updatedUser,
+          token,
+          refreshToken,
+        });
+      });
+    } catch (error) {
+      console.log("login error", error);
+      return next(error);
+    }
+  })(req, res, next);
+};
+
+export const loginWithoutPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const userDetails = await Users.findOne({
+      email: email,
+      recrootUserType: { $in: ["tempCandidate", "Candidate"] },
+    });
+
+    if (userDetails && userDetails.recrootUserType === "tempCandidate") {
+      userDetails.recrootUserType = "Candidate";
+      await userDetails.save();
+    }
+
+    if (!userDetails) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const body = {
+      _id: userDetails._id,
+      email: userDetails.email,
+      role: userDetails.recrootUserType,
+    };
+
+    const token = jwt.sign({ user: body }, process.env.TOKEN_KEY, {
+      expiresIn: "24h",
+    });
+const refreshToken = generateRefreshToken(userDetails);
+    return res.status(200).json({
+      verify: true,
+      User: userDetails,
+      token,
+      refreshToken,
+    });
+  } catch (error) {
+    console.error("loginWithoutPassword error:", error);
+    return res.status(500).send(error);
+  }
+};
+
+export const sendEmployerOTPemail = async (req, res) => {
+  const { firstName, referral_code, email, delete: isDeleteRequest } = req.body;
+
+  console.log(firstName, "firstName");
+
+  if (!firstName || !email) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  try {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    const templateId = isDeleteRequest
+      ? "d-5d82c3ab556e417ba12192467f06f371"
+      : "d-c4c60c3867c6410ca8e0c9f760974a88";
+
+    const msg = {
+      to: 'srimidha@arinnovate.io',
+      from: {
+        name: "Recroot Account",
+        email: "recroot-account@recroot.io",
+      },
+      templateId: templateId,
+      dynamic_template_data: {
+        employerName: firstName,
+        code: referral_code,
+      },
+    };
+
+    await sgMail.send(msg);
+    console.log("Email Sent Successfully");
+
+    return res.status(200).json({ message: "OTP email sent successfully" });
+  } catch (error) {
+    console.error("Error sending email:", error);
+
+    if (error.response) {
+      console.error("SendGrid error response:", error.response.body);
+    }
+
+    return res.status(500).json({
+      error: "Failed to send OTP email",
+      details: error.message || "An unknown error occurred",
+    });
+  }
+};
