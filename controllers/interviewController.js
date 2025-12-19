@@ -420,6 +420,17 @@ export const saveInterviewEvent = async (req, res) => {
 
         console.log("✅ Interruption saved:", payload);
 
+        if (reason === "window_closed") {
+            console.log("🛑 Window closed — auto-finalizing interview");
+
+            await TestInterview.findByIdAndUpdate(interviewId, {
+                status: "completed",
+                completed: new Date()
+            });
+
+            console.log("✅ Auto-finalize complete for interview:", interviewId);
+        }
+
         return res.json({
             ok: true,
             message: "Interruption recorded",
