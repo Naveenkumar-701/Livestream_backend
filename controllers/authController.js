@@ -6,48 +6,49 @@ import { generateRefreshToken } from "../utils/helpers.js";
 
 export const checkUser = async (req, res) => {
   try {
-    const { email, delete: isDeleteRequest } = req.body;
+    const { email } = req.body;
 
     const existingUser = await Users.findOne({
       email: email.toLowerCase(),
     }).lean();
 
+    // ❌ User not found
     if (!existingUser) {
       return res.status(400).json({
-        error: "No account found with this email. Please verify the email address and try again.",
+        success: false,
+        message:
+          "No account found with this email. Please verify the email address and try again.",
       });
     }
 
-    if (existingUser?.method === "google") {
+    // ❌ Google login user
+    if (existingUser.method === "google") {
       return res.status(400).json({
-        error: "This account uses Google Sign-In. Please log in with Google to continue.",
+        success: false,
+        message:
+          "This account uses Google Sign-In. Please log in with Google to continue.",
       });
     }
 
     let updatedUser = existingUser;
-    let referralCode;
 
+    // ✅ Candidate / tempCandidate flow
     if (
       existingUser.recrootUserType === "tempCandidate" ||
       existingUser.recrootUserType === "Candidate"
     ) {
-      referralCode = Math.floor(1000 + Math.random() * 9000);
-
-      const updateObject = {
-        $set: {
-          referral_code: referralCode,
-        },
-      };
+      const referralCode = Math.floor(1000 + Math.random() * 9000);
 
       updatedUser = await Users.findOneAndUpdate(
         { email: email.toLowerCase() },
-        updateObject,
+        { $set: { referral_code: referralCode } },
         { new: true }
       ).lean();
 
       if (!updatedUser) {
         return res.status(400).json({
-          error: "User not found or unable to update",
+          success: false,
+          message: "User not found or unable to update user details.",
         });
       }
 
@@ -66,18 +67,30 @@ export const checkUser = async (req, res) => {
       const expiresAt = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
 
       return res.status(200).json({
+        success: true,
+        message: "OTP sent successfully to your email.",
         updatedUser,
         token,
         expiresAt,
       });
     }
 
-    return res.status(200).json({ existingUser });
+    // ✅ Existing user but no OTP flow
+    return res.status(200).json({
+      success: true,
+      message: "User verified successfully.",
+      existingUser,
+    });
+
   } catch (error) {
     console.error(`Error occurred: ${error.message}`);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
+
 
 export const loginController = async (req, res, next) => {
   console.log("--------------- app post auth login  1");
@@ -245,4 +258,35 @@ export const sendEmployerOTPemail = async (req, res) => {
       details: error.message || "An unknown error occurred",
     });
   }
+};
+
+
+export const refreshTokenController = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token missing" });
+  }
+
+  const user = await Users.findOne({ refreshToken });
+
+  if (!user) {
+    return res.status(403).json({ message: "Invalid refresh token" });
+  }
+
+  const payload = {
+    _id: user._id,
+    email: user.email,
+    role: user.recrootUserType,
+  };
+
+  const newAccessToken = jwt.sign(
+    { user: payload },
+    process.env.TOKEN_KEY,
+    { expiresIn: "24h" }
+  );
+
+  return res.json({
+    token: newAccessToken,
+  });
 };
