@@ -246,3 +246,34 @@ export const sendEmployerOTPemail = async (req, res) => {
     });
   }
 };
+
+
+export const refreshTokenController = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token missing" });
+  }
+
+  const user = await Users.findOne({ refreshToken });
+
+  if (!user) {
+    return res.status(403).json({ message: "Invalid refresh token" });
+  }
+
+  const payload = {
+    _id: user._id,
+    email: user.email,
+    role: user.recrootUserType,
+  };
+
+  const newAccessToken = jwt.sign(
+    { user: payload },
+    process.env.TOKEN_KEY,
+    { expiresIn: "24h" }
+  );
+
+  return res.json({
+    token: newAccessToken,
+  });
+};
