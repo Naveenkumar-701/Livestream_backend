@@ -8,11 +8,12 @@ const router = express.Router();
  * Upload candidate profile image
  * @route POST /api/candidate/upload-profile-image
  */
-router.put(
-  "/upload-profile-image/:id",
+
+router.get("/profile", verifyToken, getProfile);
+
+router.post(
+  "/upload-profile-image",
   upload.single("file"),
   uploadCandidateProfileImage
 );
-router.get("/profile", verifyToken, getProfile);
-
 export default router;

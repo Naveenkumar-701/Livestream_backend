@@ -61,14 +61,14 @@ export const getProfile = async (req, res) => {
 
 export const uploadCandidateProfileImage = async (req, res) => {
   try {
-    console.log("👉 PARAM ID:", req.params.id);
-    console.log("👉 REQ FILE:", req.file);   // ⭐ MOST IMPORTANT
-    console.log("👉 REQ BODY:", req.body);   // optional
+    console.log("👉 METHOD:", req.method);
+    console.log("👉 BODY:", req.body);
+    console.log("👉 FILE:", req.file);
 
-    const { id } = req.params;
+    const { userId } = req.body;
 
-    if (!id) {
-      return res.status(400).json({ message: "id is required" });
+    if (!userId) {
+      return res.status(400).json({ message: "userId is required" });
     }
 
     if (!req.file) {
@@ -76,15 +76,14 @@ export const uploadCandidateProfileImage = async (req, res) => {
     }
 
     if (!req.file.mimetype.startsWith("image/")) {
-      return res.status(400).json({ message: "Only image files are allowed" });
+      return res.status(400).json({ message: "Only image files allowed" });
     }
 
-    const key = `userProfile/${id}/${Date.now()}_${req.file.originalname}`;
-
+    const key = `userProfile/${userId}/${Date.now()}_${req.file.originalname}`;
     const uploaded = await uploadFile(req.file, key);
 
-    const updatedCandidate = await Users.findByIdAndUpdate(
-      id,
+    const updatedUser = await Users.findByIdAndUpdate(
+      userId,
       {
         profpicFileLocation: {
           photo: uploaded.key,
@@ -94,18 +93,17 @@ export const uploadCandidateProfileImage = async (req, res) => {
       { new: true }
     );
 
-    if (!updatedCandidate) {
-      return res.status(404).json({ message: "Candidate not found" });
-    }
-
     return res.status(200).json({
-      message: "Profile image uploaded successfully",
-      profileImage: updatedCandidate.profpicFileLocation,
+      message: "Profile image uploaded",
+      profileImage: updatedUser.profpicFileLocation,
     });
-  } catch (error) {
-    console.error("❌ Upload profile image error:", error);
-    return res.status(500).json({ message: "Something went wrong" });
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
 
 
