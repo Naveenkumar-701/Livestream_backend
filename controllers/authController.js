@@ -245,7 +245,10 @@ export const sendEmployerOTPemail = async (req, res) => {
     await sgMail.send(msg);
     console.log("Email Sent Successfully");
 
-    return res.status(200).json({ message: "OTP email sent successfully" });
+    return res.status(200).json({
+  success: true,
+  message: "OTP email sent successfully",
+});
   } catch (error) {
     console.error("Error sending email:", error);
 
@@ -254,9 +257,10 @@ export const sendEmployerOTPemail = async (req, res) => {
     }
 
     return res.status(500).json({
-      error: "Failed to send OTP email",
-      details: error.message || "An unknown error occurred",
-    });
+  success: false,
+  message: "Failed to send OTP email",
+});
+
   }
 };
 
