@@ -60,30 +60,29 @@ export const getProfile = async (req, res) => {
 // };
 
 export const uploadCandidateProfileImage = async (req, res) => {
+  console.log("🔥 uploadCandidateProfileImage API HIT");
+
   try {
-    console.log("👉 PARAM ID:", req.params.id);
-    console.log("👉 REQ FILE:", req.file);   // ⭐ MOST IMPORTANT
-    console.log("👉 REQ BODY:", req.body);   // optional
-
     const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ message: "id is required" });
-    }
+    console.log("🆔 User ID:", id);
 
     if (!req.file) {
+      console.error("❌ No file uploaded");
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    if (!req.file.mimetype.startsWith("image/")) {
-      return res.status(400).json({ message: "Only image files are allowed" });
-    }
+    console.log("📂 File received:", req.file.originalname);
 
-    const key = `userProfile/${id}/${Date.now()}_${req.file.originalname}`;
+    // ✅ CALL HELPER PROPERLY
+    const uploaded = await uploadFile({
+      file: req.file,
+      bucket: process.env.AWS_PROFILE_BUCKET,
+      folder: `userProfile/${id}`,
+    });
 
-    const uploaded = await uploadFile(req.file, key);
+    console.log("🗄️ Updating MongoDB with S3 data...");
 
-    const updatedCandidate = await Users.findByIdAndUpdate(
+    const updatedUser = await Users.findByIdAndUpdate(
       id,
       {
         profpicFileLocation: {
@@ -94,18 +93,22 @@ export const uploadCandidateProfileImage = async (req, res) => {
       { new: true }
     );
 
-    if (!updatedCandidate) {
-      return res.status(404).json({ message: "Candidate not found" });
+    if (!updatedUser) {
+      console.error("❌ User not found");
+      return res.status(404).json({ message: "User not found" });
     }
+
+    console.log("✅ Profile image updated successfully");
 
     return res.status(200).json({
       message: "Profile image uploaded successfully",
-      profileImage: updatedCandidate.profpicFileLocation,
+      profileImage: updatedUser.profpicFileLocation,
     });
   } catch (error) {
-    console.error("❌ Upload profile image error:", error);
+    console.error("❌ Upload error:", error);
     return res.status(500).json({ message: "Something went wrong" });
   }
 };
+
 
 
