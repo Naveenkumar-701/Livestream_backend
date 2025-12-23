@@ -132,7 +132,7 @@ export const loginController = async (req, res, next) => {
           { expiresIn: "24h" }
         );
 
-       const refreshToken = generateRefreshToken(user);
+        const refreshToken = generateRefreshToken(user);
 
         await Users.findByIdAndUpdate(user._id, {
           refreshToken,
@@ -196,17 +196,23 @@ export const loginWithoutPassword = async (req, res) => {
       email: userDetails.email,
       role: userDetails.recrootUserType,
     };
-
+    console.log('body', body)
     const token = jwt.sign({ user: body }, process.env.TOKEN_KEY, {
       expiresIn: "24h",
     });
-const refreshToken = generateRefreshToken(userDetails);
+    const refreshToken = generateRefreshToken(userDetails);
+    console.log('userDetails._id', userDetails._id)
+    await Users.findByIdAndUpdate(userDetails._id, {
+      refreshToken,
+    });
+    const updatedUser = await Users.findById(userDetails._id);
     return res.status(200).json({
       verify: true,
-      User: userDetails,
+      User: updatedUser,
       token,
       refreshToken,
     });
+
   } catch (error) {
     console.error("loginWithoutPassword error:", error);
     return res.status(500).send(error);
@@ -246,9 +252,9 @@ export const sendEmployerOTPemail = async (req, res) => {
     console.log("Email Sent Successfully");
 
     return res.status(200).json({
-  success: true,
-  message: "OTP email sent successfully",
-});
+      success: true,
+      message: "OTP email sent successfully",
+    });
   } catch (error) {
     console.error("Error sending email:", error);
 
@@ -257,13 +263,12 @@ export const sendEmployerOTPemail = async (req, res) => {
     }
 
     return res.status(500).json({
-  success: false,
-  message: "Failed to send OTP email",
-});
+      success: false,
+      message: "Failed to send OTP email",
+    });
 
   }
 };
-
 
 export const refreshTokenController = async (req, res) => {
   const { refreshToken } = req.body;
@@ -284,13 +289,24 @@ export const refreshTokenController = async (req, res) => {
     role: user.recrootUserType,
   };
 
+  // 🔑 NEW ACCESS TOKEN
   const newAccessToken = jwt.sign(
     { user: payload },
     process.env.TOKEN_KEY,
-    { expiresIn: "24h" }
+    { expiresIn: "2d" }
   );
 
+  // 🔄 ROTATE REFRESH TOKEN (THIS WAS MISSING)
+  const newRefreshToken = generateRefreshToken(user);
+
+  await Users.findByIdAndUpdate(user._id, {
+    refreshToken: newRefreshToken,
+  });
+
+  // ✅ SEND BOTH TOKENS
   return res.json({
     token: newAccessToken,
+    refreshToken: newRefreshToken,
   });
 };
+
