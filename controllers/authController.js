@@ -15,20 +15,17 @@ export const checkUser = async (req, res) => {
     // ❌ User not found
     if (!existingUser) {
       return res.status(400).json({
-        error:
+        success: false,
+        message:
           "No account found with this email. Please verify the email address and try again.",
       });
     }
-    if (existingUser.archiveStatus === true) {
-      return res.status(403).json({
-        message:
-          "Your account has been scheduled for deletion and cannot be accessed.",
-        code: "ACCOUNT_DELETED",
-      });
-    }
-    if (existingUser?.method === "google") {
+
+    // ❌ Google login user
+    if (existingUser.method === "google") {
       return res.status(400).json({
-        error:
+        success: false,
+        message:
           "This account uses Google Sign-In. Please log in with Google to continue.",
       });
     }
@@ -61,9 +58,11 @@ export const checkUser = async (req, res) => {
         role: updatedUser.recrootUserType,
       };
 
-      const token = jwt.sign({ user: body }, process.env.TOKEN_KEY, {
-        expiresIn: "24h",
-      });
+      const token = jwt.sign(
+        { user: body },
+        process.env.TOKEN_KEY,
+        { expiresIn: "24h" }
+      );
 
       const expiresAt = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
 
@@ -107,13 +106,7 @@ export const loginController = async (req, res, next) => {
       }
 
       const userDetails = await Users.findById(user?._id);
-      if (userDetails?.archiveStatus === true) {
-        return res.status(403).json({
-          message:
-            "Your account has been scheduled for deletion and cannot be accessed.",
-          code: "ACCOUNT_DELETED",
-        });
-      }
+
       if (
         userDetails &&
         userDetails.archiveStatus &&
@@ -133,9 +126,11 @@ export const loginController = async (req, res, next) => {
           role: user.recrootUserType,
         };
 
-        const token = jwt.sign({ user: payload }, process.env.TOKEN_KEY, {
-          expiresIn: "24h",
-        });
+        const token = jwt.sign(
+          { user: payload },
+          process.env.TOKEN_KEY,
+          { expiresIn: "24h" }
+        );
 
         const refreshToken = generateRefreshToken(user);
 
@@ -147,8 +142,8 @@ export const loginController = async (req, res, next) => {
         if (
           user &&
           !user.isAvailabilityAdded &&
-          user.memberType !== "Candidate" &&
-          user.memberType !== "tempCandidate"
+          (user.memberType !== "Candidate" &&
+            user.memberType !== "tempCandidate")
         ) {
           const schedules = generateSchedules();
 
@@ -195,13 +190,7 @@ export const loginWithoutPassword = async (req, res) => {
     if (!userDetails) {
       return res.status(404).json({ message: "User not found" });
     }
-    if (userDetails.archiveStatus === true) {
-      return res.status(403).json({
-        message:
-          "Your account has been scheduled for deletion and cannot be accessed.",
-        code: "ACCOUNT_DELETED",
-      });
-    }
+
     const body = {
       _id: userDetails._id,
       email: userDetails.email,
@@ -212,6 +201,11 @@ export const loginWithoutPassword = async (req, res) => {
       expiresIn: "24h",
     });
     const refreshToken = generateRefreshToken(userDetails);
+    console.log('userDetails._id', userDetails._id)
+    await Users.findByIdAndUpdate(userDetails._id, {
+      refreshToken,
+    });
+    const updatedUser = await Users.findById(userDetails._id);
     return res.status(200).json({
       verify: true,
       User: updatedUser,
@@ -242,8 +236,7 @@ export const sendEmployerOTPemail = async (req, res) => {
       : "d-c4c60c3867c6410ca8e0c9f760974a88";
 
     const msg = {
-      to: email,
-      // to: "srimidha@arinnovate.io",
+      to: 'srimidha@arinnovate.io',
       from: {
         name: "Recroot Account",
         email: "recroot-account@recroot.io",
@@ -296,9 +289,12 @@ export const refreshTokenController = async (req, res) => {
     role: user.recrootUserType,
   };
 
-  const newAccessToken = jwt.sign({ user: payload }, process.env.TOKEN_KEY, {
-    expiresIn: "24h",
-  });
+  // 🔑 NEW ACCESS TOKEN
+  const newAccessToken = jwt.sign(
+    { user: payload },
+    process.env.TOKEN_KEY,
+    { expiresIn: "2d" }
+  );
 
   // 🔄 ROTATE REFRESH TOKEN (THIS WAS MISSING)
   const newRefreshToken = generateRefreshToken(user);
@@ -310,53 +306,7 @@ export const refreshTokenController = async (req, res) => {
   // ✅ SEND BOTH TOKENS
   return res.json({
     token: newAccessToken,
-    refreshToken: refreshToken,
+    refreshToken: newRefreshToken,
   });
 };
 
-export const deleteAccountRequest = async (req, res) => {
-  try {
-    const { userId, reasons } = req.body;
-
-    let othersText = null;
-
-    const cleanReasons = reasons.filter((r) => {
-      if (r.startsWith("Others:")) {
-        othersText = r.replace("Others:", "").trim();
-        return false;
-      }
-      return true;
-    });
-
-    const user = await Users.findByIdAndUpdate(
-      userId,
-      {
-        archiveStatus: true,
-        deleteRequest: {
-          reasons: cleanReasons.length ? cleanReasons : ["No reason provided"],
-          othersText,
-          deletionRequestedAt: new Date(),
-        },
-      },
-      { new: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Account scheduled for deletion",
-    });
-  } catch (error) {
-    console.error("Delete account error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};

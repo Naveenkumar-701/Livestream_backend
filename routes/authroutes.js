@@ -3,7 +3,7 @@ import passport from "passport";
 import jwt from "jsonwebtoken";
 // import User from "../models/User.js";
 // import { generateRefreshToken, generateSchedules } from "../utils/helpers.js";
-import { checkUser, deleteAccountRequest, loginWithoutPassword, refreshTokenController, sendEmployerOTPemail } from "../controllers/authController.js";
+import { checkUser, loginWithoutPassword, refreshTokenController, sendEmployerOTPemail } from "../controllers/authController.js";
 import { registerUser, setPasswordAfterOtp, verifyOtp } from "../controllers/signupController.js";
 
 const authRouter = express.Router();
@@ -15,5 +15,5 @@ authRouter.post("/register", registerUser);
 authRouter.post("/verify-otp", verifyOtp);
 authRouter.post("/set-password", setPasswordAfterOtp);
 authRouter.post("/refresh-token", refreshTokenController);
-authRouter.post("/delete-account", deleteAccountRequest);
+
 export default authRouter;
