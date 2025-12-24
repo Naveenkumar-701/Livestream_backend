@@ -447,6 +447,21 @@ const UserSchema = new mongoose.Schema(
     interviewCount: { type: Number, default: 0 },
     interviewAllocated: { type: Number, default: 0 },
     archiveStatus: { type: Boolean, default: false },
+    deleteRequest: {
+      _id: false, // 👈 prevents MongoDB from creating an _id
+      reasons: {
+        type: [String],
+        default: [],
+      },
+      othersText: {
+        type: String,
+        default: null,
+      },
+      deletionRequestedAt: {
+        type: Date,
+        default: null,
+      },
+    },
     loginviaotp: { type: Boolean, default: false },
     freeParsers: [],
     newSkills: [],
@@ -512,7 +527,7 @@ const UserSchema = new mongoose.Schema(
     },
     countryDetails: {},
   },
-  { strict: false } 
+  { strict: false }
 );
 
 UserSchema.methods.isValidPassword = async function (password) {
