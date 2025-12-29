@@ -67,7 +67,7 @@
 ////// Fix for Deepgram
 
 
-import 'dotenv/config'; 
+import 'dotenv/config';
 
 import express from "express";
 import cors from "cors";
@@ -79,7 +79,11 @@ import { initDeepgramSocket } from "./deepgram/deepgramSocket.js";
 // Routes
 import livekitRoutes from "./routes/livekitRoutes.js";
 import interviewRoutes from "./routes/interviewRoutes.js";
+import ttsRoutes from "./routes/ttsRoutes.js";
 
+// import recordingsRoutes from "./routes/recordingsRoutes.js";
+import authRoutes from './routes/authroutes.js'
+import userRoutes from './routes/userRoutes.js'
 connectDB();
 
 const app = express();
@@ -93,6 +97,8 @@ app.use(
             const allowedOrigins = [
                 "http://localhost:3000",
                 "http://localhost:3001",
+                "http://192.168.0.18:8081",
+                "http://192.168.0.18:5000",
                 "https://livestream-alpha-eight.vercel.app",
             ];
 
@@ -120,14 +126,21 @@ app.get("/_env-check", (req, res) => {
         S3_SSE_KMS_KEY_ID: process.env.S3_SSE_KMS_KEY_ID ? "set" : "(none)",
     });
 });
-
+app.use((req, res, next) => {
+  console.log("➡️", req.method, req.url, req.headers["content-type"]);
+  next();
+});
 app.use("/api/livekit", livekitRoutes);
 app.use("/api/interview", interviewRoutes);
+app.use("/api/tts", ttsRoutes);
+// app.use("/api/recordings", recordingsRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 
 const PORT = process.env.PORT || 5000;
 
 
-const server = http.createServer(app);  
+const server = http.createServer(app);
 initDeepgramSocket(server);
 
 // for website

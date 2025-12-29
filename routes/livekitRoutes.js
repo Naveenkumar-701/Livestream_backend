@@ -1,17 +1,3 @@
-
-
-// import express from "express";
-// import { issueJoinToken, startEgress, stopEgress } from "../controllers/livekit_controller.js";
-// const router = express.Router();
-
-// router.post("/token", issueJoinToken);
-// router.post("/egress/start", startEgress);
-// router.post("/egress/stop", stopEgress);
-
-// export default router;
-
-
-
 import express from "express";
 import {
     issueJoinToken,
@@ -37,3 +23,4 @@ router.get("/egress/stop", stopEgressGET);
 router.get("/list-recordings", listRecordingsByRoomGET);
 
 export default router;
+
