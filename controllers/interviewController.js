@@ -1144,3 +1144,75 @@ export const finalizeInterview = async (req, res) => {
         return res.status(500).json({ ok: false });
     }
 };
+
+// Save answer in db as structure
+
+export const saveInterviewAnswersStructured = async (req, res) => {
+    try {
+        const { interviewId, answers } = req.body;
+
+        if (!interviewId || !Array.isArray(answers)) {
+            return res.status(400).json({ ok: false });
+        }
+
+        const interview = await TestInterview.findById(interviewId);
+        if (!interview) {
+            return res.status(404).json({ ok: false });
+        }
+
+        // Group answers by parent question
+        const grouped = {};
+
+        for (const a of answers) {
+            if (!grouped[a.questionId]) {
+                grouped[a.questionId] = [];
+            }
+            grouped[a.questionId].push(a);
+        }
+
+        // Process each question
+        interview.questionsList.forEach((q) => {
+            const qAnswers = grouped[q._id.toString()];
+            if (!qAnswers) return;
+
+            // sort by followUpIndex
+            qAnswers.sort((a, b) => a.followUpIndex - b.followUpIndex);
+
+            q.follow_up_questions = q.follow_up_questions || [];
+
+            qAnswers.forEach((ans) => {
+                if (ans.followUpIndex === 0) {
+                    // ✅ Parent answer
+                    q.answer = ans.candiAnswer;
+                    q.timings = {
+                        startTime: ans.startTime,
+                        endTime: ans.endTime,
+                    };
+                } else {
+                    // ✅ Follow-up answers
+                    q.follow_up_questions.push({
+                        question: ans.question,
+                        answer: ans.candiAnswer,
+                        timings: {
+                            startTime: ans.startTime,
+                            endTime: ans.endTime,
+                        },
+                    });
+                }
+            });
+        });
+
+        interview.submitted = new Date();
+        interview.interviewStatus = "completed";
+
+        await interview.save();
+
+        console.log("✅ Structured interview answers saved");
+
+        res.json({ ok: true });
+    } catch (err) {
+        console.error("❌ saveInterviewAnswersStructured:", err);
+        res.status(500).json({ ok: false });
+    }
+};
+
