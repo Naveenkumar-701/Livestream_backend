@@ -70,9 +70,10 @@
 import 'dotenv/config';
 
 import express from "express";
+import session from "express-session";
 import cors from "cors";
 import http from "http";
-
+import passport from "./config/passport.js";
 import connectDB from "./config/db.js";
 import { initDeepgramSocket } from "./deepgram/deepgramSocket.js";
 
@@ -114,6 +115,7 @@ app.use(
 
 app.get("/", (req, res) => res.send("API is running..."));
 
+
 app.get("/_env-check", (req, res) => {
     const val = (v) => (v ? "set" : "missing");
     res.json({
@@ -130,6 +132,21 @@ app.use((req, res, next) => {
   console.log("➡️", req.method, req.url, req.headers["content-type"]);
   next();
 });
+
+
+// created for google auth
+// app.use(
+//   session({
+//     secret: process.env.SESSION_SECRET,
+//     resave: false,
+//     saveUninitialized: false,
+//   })
+// );
+
+// app.use(passport.initialize());
+// app.use(passport.session());
+
+
 app.use("/api/livekit", livekitRoutes);
 app.use("/api/interview", interviewRoutes);
 app.use("/api/tts", ttsRoutes);
