@@ -15,7 +15,7 @@ authRouter.post("/send-otp", sendEmployerOTPemail);
 authRouter.post("/refresh-token", refreshTokenController);
 authRouter.post("/login-password", loginWithPassword);
 
-authRouter.put("/register", registerUser);
-authRouter.post("/verify-email", verifyEmail);
+authRouter.post("/register", registerUser);
+authRouter.put("/verify-email/:id", verifyEmail);
 authRouter.post("/set-password", setPasswordAfterOtp);
 export default authRouter;
