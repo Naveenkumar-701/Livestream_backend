@@ -1,8 +1,84 @@
 import jwt from "jsonwebtoken";
 import Users from "../models/Users.js";
-
+import { OAuth2Client } from "google-auth-library";
 import sgMail from "@sendgrid/mail";
 import { generateRefreshToken } from "../utils/helpers.js";
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+export const googleLogin = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: "Google token is required" });
+    }
+
+    // 1️⃣ Verify Google token
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub, email, name, picture } = payload;
+
+    // 2️⃣ Check if user exists
+    let user = await Users.findOne({ email });
+
+    // ❌ Email exists but not Google account
+    if (user && (!user.google || !user.google.id)) {
+      return res.status(400).json({
+        message:
+          "This email is registered with password login. Please login using email & password.",
+      });
+    }
+
+    // 3️⃣ Create user if not exists
+    if (!user) {
+      user = await Users.create({
+        email,
+        name,
+        google: {
+          id: sub,
+          name,
+          email,
+        },
+        method: "google",
+        recrootUserType: "Candidate", // adjust if needed
+        profileImage: picture,
+      });
+    }
+
+    // 4️⃣ Create JWT (same format you already use)
+    const jwtPayload = {
+      _id: user._id,
+      email: user.email,
+      role: user.recrootUserType,
+    };
+
+    const accessToken = jwt.sign(
+      { user: jwtPayload },
+      process.env.TOKEN_KEY,
+      { expiresIn: "24h" }
+    );
+
+    const refreshToken = generateRefreshToken(user);
+
+    await Users.findByIdAndUpdate(user._id, { refreshToken });
+
+    // 5️⃣ Response
+    return res.status(200).json({
+      User: user,
+      token: accessToken,
+      refreshToken,
+      method: "google",
+    });
+  } catch (error) {
+    console.error("Google Login Error:", error);
+    return res.status(500).json({ message: "Google authentication failed" });
+  }
+};
 
 export const checkUser = async (req, res) => {
   try {
@@ -90,7 +166,6 @@ export const checkUser = async (req, res) => {
     });
   }
 };
-
 
 export const loginController = async (req, res, next) => {
   console.log("--------------- app post auth login  1");
@@ -310,3 +385,91 @@ export const refreshTokenController = async (req, res) => {
   });
 };
 
+export const loginWithPassword = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1️⃣ Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password are required",
+      });
+    }
+
+    // 2️⃣ Find user
+    const user = await Users.findOne({
+      email: email.toLowerCase(),
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Your email id is invalid",
+      });
+    }
+
+    // ❌ Google-only account
+    if (user.method === "google" || user.google?.id) {
+      return res.status(400).json({
+        message:
+          "This account uses Google Sign-In. Please login with Google.",
+      });
+    }
+
+    // ❌ Password not set
+    if (!user.password) {
+      return res.status(400).json({
+        message: "Password not set. Please use Forgot Password.",
+      });
+    }
+
+    // 3️⃣ Verify password
+    const isMatch = await user.isValidPassword(password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    // // ❌ Deactivated user
+    // if (user.archiveStatus && user.userInvitationStatus === "removed") {
+    //   return res.status(403).json({
+    //     message: "Your account has been deactivated by Admin",
+    //   });
+    // }
+
+    // 4️⃣ JWT Payload
+    const payload = {
+      _id: user._id,
+      email: user.email,
+      role: user.recrootUserType,
+    };
+
+    const token = jwt.sign(
+      { user: payload },
+      process.env.TOKEN_KEY,
+      { expiresIn: "24h" }
+    );
+
+    const refreshToken = generateRefreshToken(user);
+
+    // 5️⃣ Update user
+    user.refreshToken = refreshToken;
+    user.lastLogin = new Date();
+    user.method = "local";
+
+    await user.save();
+
+    // 6️⃣ Response
+    return res.status(200).json({
+      User: user,
+      token,
+      refreshToken,
+    });
+  } catch (error) {
+    console.error("Password Login Error:", error);
+    return res.status(500).json({
+      message: "Login failed",
+    });
+  }
+};
