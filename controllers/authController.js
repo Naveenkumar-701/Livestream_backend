@@ -8,15 +8,15 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const googleLogin = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { idToken } = req.body;
 
-    if (!token) {
+    if (!idToken) {
       return res.status(400).json({ message: "Google token is required" });
     }
 
     // 1️⃣ Verify Google token
     const ticket = await client.verifyIdToken({
-      idToken: token,
+      idToken,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
 
