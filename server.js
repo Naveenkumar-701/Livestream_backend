@@ -73,7 +73,7 @@ import express from "express";
 import session from "express-session";
 import cors from "cors";
 import http from "http";
-import passport from "./config/passport.js";
+// import passport from "./config/passport.js";
 import connectDB from "./config/db.js";
 import { initDeepgramSocket } from "./deepgram/deepgramSocket.js";
 
