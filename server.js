@@ -85,6 +85,8 @@ import ttsRoutes from "./routes/ttsRoutes.js";
 // import recordingsRoutes from "./routes/recordingsRoutes.js";
 import authRoutes from './routes/authroutes.js'
 import userRoutes from './routes/userRoutes.js'
+import stripeRoutes from "./routes/paymentRoutes.js";
+import pricingRoutes from "./routes/paymentPlanRoutes.js";
 connectDB();
 
 const app = express();
@@ -153,6 +155,8 @@ app.use("/api/tts", ttsRoutes);
 // app.use("/api/recordings", recordingsRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/stripe", stripeRoutes);
+app.use("/api/pricing", pricingRoutes);
 
 const PORT = process.env.PORT || 5000;
 
